@@ -15,7 +15,7 @@ np.random.seed(42)
 torch.manual_seed(42)
 
 
-class ALDI:
+class CiteULike:
     def __init__(self, handler):
         self.handler = handler
         args.dataset = "CiteULIke"
@@ -486,7 +486,7 @@ class ALDI:
             return results, np.concatenate(score_list, axis=0)
 
 
-class Recommender:
+class Amazon2018:
     def __init__(self, handler):
         args.dataset = "Amazon2018"
         self.handler = handler
@@ -953,25 +953,25 @@ class Recommender:
 
 
 if __name__ == "__main__":
-    if args.model == "ALDI":
-        ALDI = ALDI(DataHandler())
-        getattr(ALDI, args.action)()
-    elif args.model == "Recommender":
-        Recommender = Recommender(DataHandler())
-        getattr(Recommender, args.action)()
-    
-    # ALDI = ALDI(DataHandler())
-    # ALDI.train_teacher()
-    # ALDI.test_teacher()
-    # ALDI.train_student()
-    # ALDI.test_student()
-    # ALDI.train_meta()
-    # ALDI.test_meta()
+    if args.model == "CiteULike":
+        CiteULike = CiteULike(DataHandler())
+        getattr(CiteULike, args.action)()
+    elif args.model == "Amazon2018":
+        Amazon2018 = Amazon2018(DataHandler())
+        getattr(Amazon2018, args.action)()
 
-    # Recommender = Recommender(DataHandler())
-    # Recommender.train_teacher()
-    # Recommender.test_teacher()
-    # Recommender.train_student()
-    # Recommender.test_student()
-    # Recommender.train_meta()
-    # Recommender.test_meta()
+    # CiteULike = CiteULike(DataHandler())
+    # CiteULike.train_teacher()
+    # CiteULike.test_teacher()
+    # CiteULike.train_student()
+    # CiteULike.test_student()
+    # CiteULike.train_meta()
+    # CiteULike.test_meta()
+
+    # Amazon2018 = Amazon2018(DataHandler())
+    # Amazon2018.train_teacher()
+    # Amazon2018.test_teacher()
+    # Amazon2018.train_student()
+    # Amazon2018.test_student()
+    # Amazon2018.train_meta()
+    # Amazon2018.test_meta()
