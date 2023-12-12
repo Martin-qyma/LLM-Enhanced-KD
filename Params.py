@@ -21,6 +21,13 @@ def ParseArgs():
     parser.add_argument("--freq_coef_a", default=10, type=float, help="coef_a")
     parser.add_argument("--freq_coef_M", default=4, type=float, help="coef_M")
     parser.add_argument("--dataset", default="Amazon2018", type=str, help="dataset")
+    parser.add_argument(
+        "model", choices=["ALDI", "Recommender"], help="Specify the model to run."
+    )
+    parser.add_argument(
+        "action",
+        help="Specify the action to perform (e.g., 'train_teacher', 'test_teacher', etc.).",
+    )
     return parser.parse_args()
 
 

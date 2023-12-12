@@ -31,7 +31,7 @@ class MetaModel(nn.Module):
 
     def forward(self, user_emb, item_content_emb):
         # Define batch normalization layers
-        self.batch_norm = nn.BatchNorm1d(item_content_emb.shape[0])
+        self.batch_norm = nn.BatchNorm1d(200)
 
         self.generator1 = ParameterGenerator(
             memory_size=self.content_dim,
@@ -48,12 +48,16 @@ class MetaModel(nn.Module):
 
         # Forward pass through item and user layers
         item_middle_emb = torch.tanh(
-            self.item_input(
-                item_content_emb.unsqueeze(1).float(),
-                self.generator1(item_content_emb.float()),
+            self.batch_norm(
+                self.item_input(
+                    item_content_emb.unsqueeze(1).float(),
+                    self.generator1(item_content_emb.float()),
+                )
             )
         )
-        gen_user_emb = torch.tanh(self.user_input(user_emb))
+        gen_user_emb = torch.tanh(
+            nn.BatchNorm1d(200)(self.user_input(user_emb))
+        )
 
         # Output layer
         gen_item_emb = self.item_output(

@@ -339,6 +339,152 @@ class ALDI:
             )
             return results, np.concatenate(score_list, axis=0)
 
+    def train_meta(self):
+        with open("./data/CiteULike/convert_dict.pkl", "rb") as file:
+            para_dict = pickle.load(file)
+        user_num = para_dict["user_num"]
+        item_num = para_dict["item_num"]
+        args.data = "warm"
+        trnLoader, _, _, _ = DataHandler().LoadData()
+        args.data = "cold"
+        _, valLoader, _, _ = DataHandler().LoadData()
+        with open("./data/CiteULike/user_emb.pkl", "rb") as file:
+            user_emb = pickle.load(file)
+        with open("./data/CiteULike/item_behavior_emb.pkl", "rb") as file:
+            item_behavior_emb = pickle.load(file)
+        item_content_emb = torch.tensor(np.load("./data/item_content_emb.npy"))
+        print("Data loaded")
+
+        model = MetaModel(emb_dim=200, content_dim=768)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-4)
+        best_val_value = 0.0
+        for epoch in range(1000):
+            model.train()
+            total_loss = 0.0
+            for trnbatch in trnLoader:
+                users, pos_items, neg_items = trnbatch
+                items = torch.cat((pos_items, neg_items), dim=-1)
+                # Zero the gradients
+                optimizer.zero_grad()
+                loss = model.calcLoss(
+                    user_emb=user_emb[users],
+                    item_content_emb=item_content_emb[items],
+                    item_behavior_emb=item_behavior_emb[items],
+                )
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+
+            model.eval()
+            with torch.no_grad():
+                rating_list = []
+                score_list = []
+                groundTrue_list = []
+                for valbatch in valLoader:
+                    users, items = valbatch
+                    predictions = model.get_user_rating(
+                        user_emb=user_emb,
+                        item_content_emb=item_content_emb,
+                        user_index=users,
+                        item_index=torch.tensor(list(range(item_num))),
+                    )
+                    ranked_scores, ranked_indices = model.get_ranked_rating(
+                        predictions, k=20
+                    )
+                    groundTrue = [para_dict["cold_val_user_nb"][i] for i in users]
+                    score_list.append(ranked_scores.tolist())
+                    rating_list.append(ranked_indices.tolist())
+                    groundTrue_list.append(groundTrue)
+
+                X = zip(rating_list, groundTrue_list)
+                pre_results = list(map(Metrics.test_one_batch, X))
+                results = {
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "ndcg": 0.0,
+                }
+                for result in pre_results:
+                    results["recall"] += result["recall"]
+                    results["precision"] += result["precision"]
+                    results["ndcg"] += result["ndcg"]
+                n_ts_user = float(len(np.unique(valLoader.dataset.users)))
+                results["recall"] /= n_ts_user
+                results["precision"] /= n_ts_user
+                results["ndcg"] /= n_ts_user
+
+                val_value = results["recall"].item()
+                if val_value > best_val_value:
+                    patient_count = 0
+                    best_val_value = val_value
+                    # Save the model
+                    torch.save(model.state_dict(), "./data/CiteULike/meta.pkl")
+
+                print(
+                    f"Epoch {epoch}, Loss: {total_loss/len(trnbatch):.4f}, Patience: {patient_count}, Recall: {val_value:.4f}"
+                )
+                if patient_count >= args.patience:
+                    break
+                patient_count += 1
+
+    def test_meta(self):
+        with open("./data/CiteULike/convert_dict.pkl", "rb") as file:
+            para_dict = pickle.load(file)
+        user_num = para_dict["user_num"]
+        item_num = para_dict["item_num"]
+        args.data = "cold"
+        _, _, testLoader, _ = DataHandler().LoadData()
+        with open("./data/CiteULike/user_emb.pkl", "rb") as file:
+            user_emb = pickle.load(file)
+        with open("./data/CiteULike/item_behavior_emb.pkl", "rb") as file:
+            item_behavior_emb = pickle.load(file)
+        item_content_emb = torch.tensor(np.load("./data/item_content_emb.npy"))
+        print("Data loaded")
+
+        model = MetaModel(emb_dim=200, content_dim=768)
+        model.load_state_dict(torch.load("./data/CiteULike/meta.pkl"), strict=False)
+        unique_users = len(np.unique(testLoader.dataset.users))
+        model.eval()
+
+        with torch.no_grad():
+            rating_list = []
+            score_list = []
+            groundTrue_list = []
+            for testbatch in testLoader:
+                users, items = testbatch
+                predictions = model.get_user_rating(
+                    user_emb=user_emb,
+                    item_content_emb=item_content_emb,
+                    user_index=users,
+                    item_index=torch.tensor(list(range(item_num))),
+                )
+                ranked_scores, ranked_indices = model.get_ranked_rating(
+                    predictions, k=20
+                )
+                groundTrue = [para_dict["cold_test_user_nb"][i] for i in users]
+                score_list.append(ranked_scores.tolist())
+                rating_list.append(ranked_indices.tolist())
+                groundTrue_list.append(groundTrue)
+
+            X = zip(rating_list, groundTrue_list)
+            pre_results = list(map(Metrics.test_one_batch, X))
+            results = {
+                "precision": 0.0,
+                "recall": 0.0,
+                "ndcg": 0.0,
+            }
+            for result in pre_results:
+                results["recall"] += result["recall"]
+                results["precision"] += result["precision"]
+                results["ndcg"] += result["ndcg"]
+            n_ts_user = float(unique_users)
+            results["recall"] /= n_ts_user
+            results["precision"] /= n_ts_user
+            results["ndcg"] /= n_ts_user
+            print(
+                f"Recall: {results['recall'].item():.4};  NDCG: {results['ndcg'].item():.4}"
+            )
+            return results, np.concatenate(score_list, axis=0)
+
 
 class Recommender:
     def __init__(self, handler):
@@ -807,16 +953,25 @@ class Recommender:
 
 
 if __name__ == "__main__":
+    if args.model == "ALDI":
+        ALDI = ALDI(DataHandler())
+        getattr(ALDI, args.action)()
+    elif args.model == "Recommender":
+        Recommender = Recommender(DataHandler())
+        getattr(Recommender, args.action)()
+    
     # ALDI = ALDI(DataHandler())
     # ALDI.train_teacher()
     # ALDI.test_teacher()
     # ALDI.train_student()
     # ALDI.test_student()
+    # ALDI.train_meta()
+    # ALDI.test_meta()
 
-    Recommender = Recommender(DataHandler)
+    # Recommender = Recommender(DataHandler())
     # Recommender.train_teacher()
     # Recommender.test_teacher()
     # Recommender.train_student()
     # Recommender.test_student()
-    Recommender.train_meta()
-    Recommender.test_meta()
+    # Recommender.train_meta()
+    # Recommender.test_meta()
